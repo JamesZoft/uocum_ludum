@@ -1,5 +1,7 @@
 source 'https://rubygems.org'
 
+gem 'ffi'
+gem 'pry'
 gem 'curses'
 gem 'gosu'
 gem 'google-cloud-speech'

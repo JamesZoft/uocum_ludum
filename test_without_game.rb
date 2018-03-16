@@ -1,14 +1,13 @@
 #!/usr/bin/ruby -w
 
 require 'bundler/setup'
-require 'curses'
-require 'gosu'
-require 'matrix'
 require 'google/cloud/speech'
 require 'ffi-portaudio'
+require 'pry'
 require 'easy_audio'
+require 'gosu'
 
-include Curses
+# include Curses
 
 class Sokoban
 
@@ -19,31 +18,29 @@ class Sokoban
                 :idle_state, :listening_state
 
   def play
-    logfile = File.open("/Users/james/projects/uocum_ludum/log.log", 'w')
-    logfile.write("")
-    logfile.close
-    init show_menu
+    # init show_menu
     playing = true
     @idle_state = true
     @listening_state = false
+    @speech = Google::Cloud::Speech.new project: "d1e4f76045a27474abc9384d10b800b8509c3fad", keyfile: "/Users/james/projects/uocumLudum-d1e4f76045a2.json"
 
     while playing
-      if !is_game_won || moves.zero?
-        draw_map
+      # if !is_game_won || moves.zero?
+        # draw_map
         process_input
-      else
-        unless @game_won
-          @game_window.close
-          refresh
-          @game_won = true
-          @gosu_game_won_track.play
-          game_won_win = Curses::Window.new 50, 300, 20, 60
-          game_won_win.clear
-          game_won_win.addstr "You win!! Completed in #{@moves} moves! You're kickin' rad!"
-          game_won_win.refresh
-          refresh
-        end
-      end
+      # else
+        # unless @game_won
+          # @game_window.close
+          # refresh
+          # @game_won = true
+          # @gosu_game_won_track.play
+          # game_won_win = Curses::Window.new 50, 300, 20, 60
+          # game_won_win.clear
+          # game_won_win.addstr "You win!! Completed in #{@moves} moves! You're kickin' rad!"
+          # game_won_win.refresh
+          # refresh
+        # end
+      # end
     end
   end
 
@@ -108,7 +105,6 @@ class Sokoban
       logfile.puts ''
     end
 
-    @speech = Google::Cloud::Speech.new project: "d1e4f76045a27474abc9384d10b800b8509c3fad", keyfile: "/Users/james/projects/uocumLudum-d1e4f76045a2.json"
     populate_map_state map
     setup_sound_tracks
     Curses.refresh
@@ -166,70 +162,68 @@ class Sokoban
     #     command = record_command
         
     # end
-    logfile = File.open("/Users/james/projects/uocum_ludum/log.log", 'a') 
-    logfile.write "test1"
+    puts "test123"
+    # @gosu_barrel_completed_track = Gosu::Sample.new('sounds/barrel_completed.wav')
+    puts "test1"
     command_buffer = []
     stream = EasyAudio::Stream.new(in_chans: 1, sample_rate: 44100, frame_size: 256) do |buffer| 
-      avg_amplitude = buffer.samples.reduce(:+).to_f / buffer.samples.size
-      command_buffer = buffer.samples
-      logfile.write avg_amplitude
-      logfile.write "\n"
-      if avg_amplitude >= 1.0
+      abs_buffer_samples = buffer.samples.map { |el| 
+        if el < 0
+          el * -1
+        else
+          el
+        end
+      }
+      avg_amplitude = abs_buffer_samples.reduce(:+).to_f / buffer.samples.size
+      # puts avg_amplitude
+      # puts abs_buffer_samples.max
+      # puts "\n"
+      if avg_amplitude >= 0.01
         @idle_state = false
+        puts "go!"
+      end
+      
+      command_buffer << buffer.samples
+      puts "min"
+      puts buffer.samples.min
+      
+      if !@idle_state && (avg_amplitude < 0.01)
         @listening_state = true
       end
       :paContinue 
     end
     stream.start
-    while @idle_state do
+    puts "test22"
+    while !@listening_state do
     end
+    puts "test33"  
     stream.close
-    logfile.write "test2"
-    logfile.close
-    logfile = File.open("/Users/james/projects/uocum_ludum/log.log", 'a') 
-    stream = EasyAudio::Stream.new(in_chans: 1, sample_rate: 44100, frame_size: 256) do |buffer| 
-      avg_amplitude = buffer.samples.reduce(:+).to_f / buffer.samples.size
-      logfile.write "listening_state"
-      logfile.write avg_amplitude
-      logfile.write "\n"
-      normalisation_factor = avg_amplitude * 1.1
-
-      command_buffer << buffer.samples.map { |el| el / normalisation_factor }
-      if avg_amplitude < 1.0
-        @idle_state = true
-        @listening_state = false
-      end
-      :paContinue 
-    end
-    stream.start
-    logfile.write "test3"
-    logfile.close
-    logfile = File.open("/Users/james/projects/uocum_ludum/log.log", 'a') 
-    while @listening_state do
-    end
-    steam.close
-
-    @gosu_barrel_completed_track.play
-
+    puts "test2"
+    @idle_state = true
+    puts "test15"
     input = recognise_command command_buffer
-    
-    logfile.write(input)
-    logfile.write("\n")
-    logfile.write(input.first)
-    logfile.write("\n\n")
-    logfile.close
+    puts "test4"
+    puts input
+    puts "\n"
+    puts input.first
+    puts "\n\n"
+
     if (input.first.transcript.include? 'play') && input.first != nil && input.first.transcript != nil
       command = record_command
       if command.first != nil && command.transcript != nil && command.transcript != ""
         command = command.first.transcript
         if command.include? "left"
-            move 'a'
+          puts 'a'
+          # move 'a'
         elsif command.include? "right"
-          move 'd'
+          puts 'd'
+          # move 'd'
         elsif command.include? "up"
-          move 'w'
+          puts 'w'
+          # move 'w'
         elsif command.include? "down"
-          move 's'
+          puts 's'
+          # move 's'
         end
       end
     end
@@ -364,21 +358,23 @@ class Sokoban
       a.push(buffer.samples); :paContinue 
     end
     stream.start
-    sleep 1
+    puts "SPEAK!"
+    sleep 2
     stream.close
 
     recognise_command a
   end
 
   def recognise_command(a)
+    puts "blah1"
     a = a.map do |arr| 
-      arr.map! do |el| 
+      arr.map do |el| 
         el = (el * 32768).to_i 
       end
     end
 
     b = a.map do |arr|
-      arr.map! do |el| 
+      arr.map do |el| 
         if el < -32768
           -32768
         elsif el > 32767
@@ -389,14 +385,16 @@ class Sokoban
       end
     end
 
+    puts b
     packed_b = b.map do |arr| 
       arr = arr.pack("s<256")
     end
     packed_b = packed_b.join
-
-    audio = speech.audio StringIO.new(packed_b), encoding: :linear16, sample_rate: 44100, language: "en-GB"
+    audio = @speech.audio StringIO.new(packed_b), encoding: :linear16, sample_rate: 44100, language: "en-GB"
     audio.recognize
   end
 
 end
 
+sokoban = Sokoban.new
+sokoban.play
