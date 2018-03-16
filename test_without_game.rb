@@ -180,20 +180,22 @@ class Sokoban
       # puts "\n"
       if avg_amplitude >= 0.01
         @idle_state = false
-        puts "go!"
+        # puts "go!"
       end
       
       command_buffer << buffer.samples
-      puts "min"
-      puts buffer.samples.min
+      # puts "min"
+      # puts buffer.samples.min
       
       if !@idle_state && (avg_amplitude < 0.01)
         @listening_state = true
+        :paComplete
       end
       :paContinue 
     end
     stream.start
     puts "test22"
+    
     while !@listening_state do
     end
     puts "test33"  
@@ -228,7 +230,7 @@ class Sokoban
       end
     end
 
-    @moves += 1
+    # @moves += 1
   end
 
   def move(direction)
