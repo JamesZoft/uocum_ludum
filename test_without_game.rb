@@ -172,7 +172,9 @@ class Sokoban
     activation_buffer = []
     finishing_listening = false
 
-    stream = EasyAudio::Stream.new(in_chans: 1, sample_rate: sample_rate, frame_size: frame_size) do |buffer| 
+    time = Time.now
+
+    stream = EasyAudio::Stream.new(in_chans: 1, out_chans: 1, sample_rate: sample_rate, frame_size: frame_size) do |buffer| 
       abs_buffer_samples = buffer.samples.map { |el| 
         if el < 0
           el * -1
@@ -187,7 +189,7 @@ class Sokoban
       puts "avg ampl for frame: #{avg_amplitude_for_frame}"
       puts "avg ampl: #{avg_amplitude}"
       
-      if activation_buffer.size > 10 && avg_amplitude_for_frame > (avg_amplitude * 2) && @idle_state = true
+      if activation_buffer.size > 10 && avg_amplitude_for_frame > (avg_amplitude * 5) && @idle_state == true
         @idle_state = false
         puts "detected noise!"
       end
@@ -196,16 +198,19 @@ class Sokoban
         command_buffer << buffer.samples
       end
 
-      if !@idle_state && (avg_amplitude_for_frame < (avg_amplitude / 5)) && !finishing_listening
+      if !@idle_state && (avg_amplitude_for_frame < (avg_amplitude / 10)) && !finishing_listening
         finishing_listening = true
       elsif finishing_listening
+        puts "finishing: #{count}"
         count += 1
       elsif count >= frames_to_wait_after_listening
+        puts "finished"
         @listening_state = true
-        :paComplete
-      else
-        :paContinue 
+        break :paComplete
       end
+      puts "TIMING: #{(Time.now - time)*1000} millis"
+      time = Time.now
+      :paContinue
     end
     stream.start
     while !@listening_state do
