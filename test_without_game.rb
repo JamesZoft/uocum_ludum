@@ -163,8 +163,15 @@ class Sokoban
         
     # end
     # @gosu_barrel_completed_track = Gosu::Sample.new('sounds/barrel_completed.wav')
+    sample_rate = 44100
+    frame_size = 32
+    wait_time = 0.5
+    frames_to_wait_after_listening = 0.5 / (frame_size / sample_rate)
+    count = 0
     command_buffer = []
-    stream = EasyAudio::Stream.new(in_chans: 1, sample_rate: 44100, frame_size: 32) do |buffer| 
+    finishing_listening = false
+
+    stream = EasyAudio::Stream.new(in_chans: 1, sample_rate: sample_rate, frame_size: frame_size) do |buffer| 
       abs_buffer_samples = buffer.samples.map { |el| 
         if el < 0
           el * -1
@@ -177,25 +184,31 @@ class Sokoban
       # puts avg_amplitude
       # puts abs_buffer_samples.max
       # puts "\n"
-      if avg_amplitude >= 0.1
+      if avg_amplitude >= 0.05
+        command_buffer = []
         @idle_state = false
         puts "go!"
       end
       
       command_buffer << buffer.samples
 
-      if !@idle_state && (avg_amplitude < 0.1)
+      if !@idle_state && (avg_amplitude < 0.01) && !finishing_listening
+        finishing_listening = true
+      elsif finishing_listening
+        count += 1
+      elsif count >= frames_to_wait_after_listening
         @listening_state = true
-        return :paComplete
+        :paComplete
+      else
+        :paContinue 
       end
-      :paContinue 
     end
     stream.start
     while !@listening_state do
     end
     stream.close
     @idle_state = true
-    input = recognise_command command_buffer, 32
+    input = record_command.first.transcript
     
     if (input.first.transcript.include? 'play') && input.first != nil && input.first.transcript != nil
       command = record_command
@@ -352,7 +365,7 @@ class Sokoban
     sleep 2
     stream.close
 
-    recognise_command a, frame_size
+    recognise_command a, 256
   end
 
   def recognise_command(a, frame_size)
