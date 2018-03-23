@@ -164,11 +164,12 @@ class Sokoban
     # end
     # @gosu_barrel_completed_track = Gosu::Sample.new('sounds/barrel_completed.wav')
     sample_rate = 44100
-    frame_size = 32
+    frame_size = 512
     wait_time = 0.5
-    frames_to_wait_after_listening = 0.5 / (frame_size / sample_rate)
+    frames_to_wait_after_listening = wait_time / (frame_size / sample_rate)
     count = 0
     command_buffer = []
+    activation_buffer = []
     finishing_listening = false
 
     stream = EasyAudio::Stream.new(in_chans: 1, sample_rate: sample_rate, frame_size: frame_size) do |buffer| 
@@ -179,20 +180,23 @@ class Sokoban
           el
         end
       }
-      avg_amplitude = abs_buffer_samples.reduce(:+).to_f / buffer.samples.size
+      avg_amplitude_for_frame = abs_buffer_samples.reduce(:+).to_f / buffer.samples.size
+      activation_buffer << avg_amplitude_for_frame
+      slice_index = activation_buffer.length >= 10 ? (activation_buffer.length - 11) : 0
+      avg_amplitude = activation_buffer.slice(slice_index, 10).reduce(:+).to_f / 10
+      puts "avg ampl for frame: #{avg_amplitude_for_frame}"
       puts "avg ampl: #{avg_amplitude}"
-      # puts avg_amplitude
-      # puts abs_buffer_samples.max
-      # puts "\n"
-      if avg_amplitude >= 0.05
-        command_buffer = []
+      
+      if activation_buffer.size > 10 && avg_amplitude_for_frame > (avg_amplitude * 2) && @idle_state = true
         @idle_state = false
-        puts "go!"
+        puts "detected noise!"
       end
       
-      command_buffer << buffer.samples
+      if !@idle_state
+        command_buffer << buffer.samples
+      end
 
-      if !@idle_state && (avg_amplitude < 0.01) && !finishing_listening
+      if !@idle_state && (avg_amplitude_for_frame < (avg_amplitude / 5)) && !finishing_listening
         finishing_listening = true
       elsif finishing_listening
         count += 1
