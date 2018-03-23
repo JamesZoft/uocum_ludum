@@ -162,11 +162,9 @@ class Sokoban
     #     command = record_command
         
     # end
-    puts "test123"
     # @gosu_barrel_completed_track = Gosu::Sample.new('sounds/barrel_completed.wav')
-    puts "test1"
     command_buffer = []
-    stream = EasyAudio::Stream.new(in_chans: 1, sample_rate: 44100, frame_size: 256) do |buffer| 
+    stream = EasyAudio::Stream.new(in_chans: 1, sample_rate: 44100, frame_size: 32) do |buffer| 
       abs_buffer_samples = buffer.samples.map { |el| 
         if el < 0
           el * -1
@@ -175,40 +173,30 @@ class Sokoban
         end
       }
       avg_amplitude = abs_buffer_samples.reduce(:+).to_f / buffer.samples.size
+      puts "avg ampl: #{avg_amplitude}"
       # puts avg_amplitude
       # puts abs_buffer_samples.max
       # puts "\n"
-      if avg_amplitude >= 0.01
+      if avg_amplitude >= 0.1
         @idle_state = false
         puts "go!"
       end
       
       command_buffer << buffer.samples
-      puts "min"
-      puts buffer.samples.min
-      
-      if !@idle_state && (avg_amplitude < 0.01)
+
+      if !@idle_state && (avg_amplitude < 0.1)
         @listening_state = true
-        return :paComplete;
+        return :paComplete
       end
       :paContinue 
     end
     stream.start
-    puts "test22"
     while !@listening_state do
     end
-    puts "test33"  
     stream.close
-    puts "test2"
     @idle_state = true
-    puts "test15"
-    input = recognise_command command_buffer
-    puts "test4"
-    puts input
-    puts "\n"
-    puts input.first
-    puts "\n\n"
-
+    input = recognise_command command_buffer, 32
+    
     if (input.first.transcript.include? 'play') && input.first != nil && input.first.transcript != nil
       command = record_command
       if command.first != nil && command.transcript != nil && command.transcript != ""
@@ -356,18 +344,18 @@ class Sokoban
   def record_command
     a = []
     stream = EasyAudio::Stream.new(in_chans: 1, sample_rate: 44100, frame_size: 256) do |buffer| 
-      a.push(buffer.samples); :paContinue 
+      a.push(buffer.samples)
+      :paContinue 
     end
     stream.start
     puts "SPEAK!"
     sleep 2
     stream.close
 
-    recognise_command a
+    recognise_command a, frame_size
   end
 
-  def recognise_command(a)
-    puts "blah1"
+  def recognise_command(a, frame_size)
     a = a.map do |arr| 
       arr.map do |el| 
         el = (el * 32768).to_i 
@@ -386,9 +374,8 @@ class Sokoban
       end
     end
 
-    puts b
     packed_b = b.map do |arr| 
-      arr = arr.pack("s<256")
+      arr = arr.pack("s<#{frame_size}")
     end
     packed_b = packed_b.join
     audio = @speech.audio StringIO.new(packed_b), encoding: :linear16, sample_rate: 44100, language: "en-GB"
