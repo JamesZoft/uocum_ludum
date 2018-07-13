@@ -167,68 +167,103 @@ class Sokoban
         
     # end
     logfile = File.open("/Users/james/projects/uocum_ludum/log.log", 'a') 
-    logfile.write "test1"
+     puts "starting function"
+    sample_rate = 44100
+    frame_size = 4096
+    wait_time = 0.5
+    frames_to_wait_after_listening = wait_time.to_f / (frame_size / sample_rate).to_f
+    count = 0
     command_buffer = []
-    stream = EasyAudio::Stream.new(in_chans: 1, sample_rate: 44100, frame_size: 256) do |buffer| 
-      avg_amplitude = buffer.samples.reduce(:+).to_f / buffer.samples.size
-      command_buffer = buffer.samples
-      logfile.write avg_amplitude
-      logfile.write "\n"
-      if avg_amplitude >= 1.0
+    activation_buffer = []
+    finishing_listening = false
+    time = Time.now
+    timings = 0
+    times = 0
+    @listening_state = false
+    @idle_state = true
+    stream = EasyAudio::Stream.new(in_chans: 1, out_chans: 1, sample_rate: sample_rate, frame_size: frame_size) do |buffer| 
+      abs_buffer_samples = buffer.samples.map { |el| 
+        if el < 0
+          el * -1
+        else
+          el
+        end
+      }
+
+      command_buffer << buffer.samples
+
+      max_ampl_for_frame = abs_buffer_samples.max
+      # avg_amplitude_for_frame = abs_buffer_samples.reduce(:+).to_f / buffer.samples.size
+      activation_buffer << max_ampl_for_frame
+      slice_index = activation_buffer.length >= 10 ? (activation_buffer.length - 11) : 0
+      max_ampl = activation_buffer.slice(slice_index, 10).max
+      # avg_amplitude = activation_buffer.slice(slice_index, 10).reduce(:+).to_f / 10
+      # puts "avg ampl for frame: #{avg_amplitude_for_frame}"
+      # puts "avg ampl: #{avg_amplitude}"
+      
+      if activation_buffer.size > 10 && max_ampl_for_frame > (max_ampl * 5) && @idle_state == true
         @idle_state = false
-        @listening_state = true
+        command_buffer = command_buffer.slice(command_buffer.length - 4, 3)
+        # puts "detected noise!"
       end
-      :paContinue 
+      
+      
+      
+
+      timings += Time.now - time
+      time = Time.now
+      times += 1
+
+      if !@idle_state && (max_ampl_for_frame < (max_ampl / 10)) && !finishing_listening
+        finishing_listening = true
+      # elsif finishing_listening
+      #   # puts "finishing: #{count}"
+      #   count += 1
+      # elsif count >= frames_to_wait_after_listening
+        # puts "finished"
+        @listening_state = true
+        :paComplete
+      else
+        :paContinue
+      end
+      # puts "TIMING: #{(Time.now - time)*1000} millis"
     end
     stream.start
-    while @idle_state do
+    while !@listening_state do
     end
     stream.close
-    logfile.write "test2"
-    logfile.close
-    logfile = File.open("/Users/james/projects/uocum_ludum/log.log", 'a') 
-    stream = EasyAudio::Stream.new(in_chans: 1, sample_rate: 44100, frame_size: 256) do |buffer| 
-      avg_amplitude = buffer.samples.reduce(:+).to_f / buffer.samples.size
-      logfile.write "listening_state"
-      logfile.write avg_amplitude
-      logfile.write "\n"
-      normalisation_factor = avg_amplitude * 1.1
-
-      command_buffer << buffer.samples.map { |el| el / normalisation_factor }
-      if avg_amplitude < 1.0
-        @idle_state = true
-        @listening_state = false
+    puts "total time: #{timings}"
+    puts "runs: #{times}"
+    puts "TIMINGS: #{((timings * 1000)/times)}"
+    input = recognise_command command_buffer, frame_size
+    if input != nil
+      puts input
+      if input.first != nil
+        puts input.first
+        if input.first.transcript != nil
+          puts input.first.transcript
+        end
       end
-      :paContinue 
     end
-    stream.start
-    logfile.write "test3"
-    logfile.close
-    logfile = File.open("/Users/james/projects/uocum_ludum/log.log", 'a') 
-    while @listening_state do
-    end
-    steam.close
 
-    @gosu_barrel_completed_track.play
-
-    input = recognise_command command_buffer
     
-    logfile.write(input)
-    logfile.write("\n")
-    logfile.write(input.first)
-    logfile.write("\n\n")
-    logfile.close
-    if (input.first.transcript.include? 'play') && input.first != nil && input.first.transcript != nil
+    if input != nil && input.first != nil && input.first.transcript != nil && (input.first.transcript.include? 'play')
       command = record_command
+      puts "recorded"
       if command.first != nil && command.transcript != nil && command.transcript != ""
         command = command.first.transcript
+        puts "command: #{command}"
         if command.include? "left"
-            move 'a'
+          # puts 'a'
+          move 'a'
         elsif command.include? "right"
+          # puts 'd'
           move 'd'
         elsif command.include? "up"
+          # puts 'w'
           move 'w'
         elsif command.include? "down"
+          # puts 's'
           move 's'
         end
       end
@@ -361,16 +396,17 @@ class Sokoban
   def record_command
     a = []
     stream = EasyAudio::Stream.new(in_chans: 1, sample_rate: 44100, frame_size: 256) do |buffer| 
-      a.push(buffer.samples); :paContinue 
+      a.push(buffer.samples)
+      :paContinue 
     end
     stream.start
     sleep 1
     stream.close
 
-    recognise_command a
+    recognise_command a, 256
   end
 
-  def recognise_command(a)
+  def recognise_command(a, frame_size)
     a = a.map do |arr| 
       arr.map! do |el| 
         el = (el * 32768).to_i 
@@ -390,7 +426,7 @@ class Sokoban
     end
 
     packed_b = b.map do |arr| 
-      arr = arr.pack("s<256")
+      arr = arr.pack("s<#{frame_size}")
     end
     packed_b = packed_b.join
 

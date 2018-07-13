@@ -22,6 +22,7 @@ class Sokoban
     playing = true
     @idle_state = true
     @listening_state = false
+    @moves = 0
     @speech = Google::Cloud::Speech.new project: "d1e4f76045a27474abc9384d10b800b8509c3fad", keyfile: "/Users/james/projects/uocumLudum-d1e4f76045a2.json"
 
     while playing
@@ -163,17 +164,20 @@ class Sokoban
         
     # end
     # @gosu_barrel_completed_track = Gosu::Sample.new('sounds/barrel_completed.wav')
+    puts "starting function"
     sample_rate = 44100
-    frame_size = 512
+    frame_size = 4096
     wait_time = 0.5
-    frames_to_wait_after_listening = wait_time / (frame_size / sample_rate)
+    frames_to_wait_after_listening = wait_time.to_f / (frame_size / sample_rate).to_f
     count = 0
     command_buffer = []
     activation_buffer = []
     finishing_listening = false
-
     time = Time.now
-
+    timings = 0
+    times = 0
+    @listening_state = false
+    @idle_state = true
     stream = EasyAudio::Stream.new(in_chans: 1, out_chans: 1, sample_rate: sample_rate, frame_size: frame_size) do |buffer| 
       abs_buffer_samples = buffer.samples.map { |el| 
         if el < 0
@@ -182,47 +186,79 @@ class Sokoban
           el
         end
       }
-      avg_amplitude_for_frame = abs_buffer_samples.reduce(:+).to_f / buffer.samples.size
-      activation_buffer << avg_amplitude_for_frame
-      slice_index = activation_buffer.length >= 10 ? (activation_buffer.length - 11) : 0
-      avg_amplitude = activation_buffer.slice(slice_index, 10).reduce(:+).to_f / 10
-      puts "avg ampl for frame: #{avg_amplitude_for_frame}"
-      puts "avg ampl: #{avg_amplitude}"
-      
-      if activation_buffer.size > 10 && avg_amplitude_for_frame > (avg_amplitude * 5) && @idle_state == true
-        @idle_state = false
-        puts "detected noise!"
-      end
-      
-      if !@idle_state
-        command_buffer << buffer.samples
-      end
 
-      if !@idle_state && (avg_amplitude_for_frame < (avg_amplitude / 10)) && !finishing_listening
-        finishing_listening = true
-      elsif finishing_listening
-        puts "finishing: #{count}"
-        count += 1
-      elsif count >= frames_to_wait_after_listening
-        puts "finished"
-        @listening_state = true
-        break :paComplete
+      command_buffer << buffer.samples
+
+      max_ampl_for_frame = abs_buffer_samples.max
+      # avg_amplitude_for_frame = abs_buffer_samples.reduce(:+).to_f / buffer.samples.size
+      activation_buffer << max_ampl_for_frame
+      slice_index = activation_buffer.length >= 10 ? (activation_buffer.length - 11) : 0
+      max_ampl = activation_buffer.slice(slice_index, 10).max
+      # avg_amplitude = activation_buffer.slice(slice_index, 10).reduce(:+).to_f / 10
+      # puts "avg ampl for frame: #{avg_amplitude_for_frame}"
+      # puts "avg ampl: #{avg_amplitude}"
+      
+      if activation_buffer.size > 10 && max_ampl_for_frame > (max_ampl * 5) && @idle_state == true
+        @idle_state = false
+        puts "COMMAND BUFFER LENGTH: #{command_buffer.length}"
+        command_buffer = command_buffer.slice(command_buffer.length - 10, 9)
+        # puts "detected noise!"
       end
-      puts "TIMING: #{(Time.now - time)*1000} millis"
+      
+      
+      
+
+      timings += Time.now - time
       time = Time.now
-      :paContinue
+      times += 1
+
+      if !@idle_state && (max_ampl_for_frame < (max_ampl / 10)) && !finishing_listening
+        finishing_listening = true
+      # elsif finishing_listening
+      #   # puts "finishing: #{count}"
+      #   count += 1
+      # elsif count >= frames_to_wait_after_listening
+        # puts "finished"
+        @listening_state = true
+        :paComplete
+      else
+        :paContinue
+      end
+      # puts "TIMING: #{(Time.now - time)*1000} millis"
     end
     stream.start
     while !@listening_state do
     end
     stream.close
-    @idle_state = true
-    input = record_command.first.transcript
+    puts "total time: #{timings}"
+    puts "runs: #{times}"
+    puts "TIMINGS: #{((timings * 1000)/times)}"
+    input = recognise_command command_buffer, frame_size
+    if input != nil
+      puts input
+      if input.first != nil
+        puts input.first
+        if input.first.transcript != nil
+          puts input.first.transcript
+        end
+      end
+    end
     
-    if (input.first.transcript.include? 'play') && input.first != nil && input.first.transcript != nil
+    if input != nil && input.first != nil && input.first.transcript != nil && (input.first.transcript.include? 'play')
       command = record_command
-      if command.first != nil && command.transcript != nil && command.transcript != ""
+      puts "recorded"
+      if command != nil
+        puts command
+        if command.first != nil
+          puts command.first
+          if command.first.transcript != nil
+            puts command.first.transcript
+          end
+        end
+      end
+      if command.first != nil && command.first != nil && command.first.transcript != ""
         command = command.first.transcript
+        puts "command: #{command}"
         if command.include? "left"
           puts 'a'
           # move 'a'
